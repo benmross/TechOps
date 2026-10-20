@@ -1325,7 +1325,7 @@ const ATSApplyList = ({ applications }: { applications: ATSApplication[] }) => {
                         <AccordionItem
                             key={team.teamPk}
                             value={team.teamPk}
-                            className="border border-border/50 rounded-xl bg-card shadow-sm px-2 data-[state=open]:ring-1 data-[state=open]:ring-primary/20 transition-all"
+                            className="group/team border border-border/50 rounded-xl bg-card shadow-sm px-2 data-[state=open]:ring-1 data-[state=open]:ring-primary/20 transition-all"
                         >
                             <AccordionTrigger className="w-full hover:no-underline px-4 py-4 items-center [&>svg]:translate-y-0">
                                 <div className="flex items-center gap-4 w-full text-left">
@@ -1344,7 +1344,7 @@ const ATSApplyList = ({ applications }: { applications: ATSApplication[] }) => {
                                                 </Badge>
                                             )}
                                         </div>
-                                        <p className="text-muted-foreground text-md font-medium line-clamp-1 pr-4">
+                                        <p className="text-muted-foreground text-md font-medium line-clamp-1 group-data-[state=open]/team:line-clamp-none pr-4">
                                             {team.teamInfo.description}
                                         </p>
                                     </div>
