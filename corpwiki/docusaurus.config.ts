@@ -78,7 +78,7 @@ const config: Config = {
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           editUrl:
-            'https://github.com/candiedoperation/TechOps/tree/master/corpwiki/',
+            'https://github.com/candiedoperation/TechOps/edit/master/corpwiki/',
         },
 
         blog: false,
