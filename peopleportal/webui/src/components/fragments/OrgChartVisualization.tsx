@@ -344,7 +344,7 @@ export const OrgChartVisualization = () => {
                                     </div>
                                 ) : (
                                     <div className="flex-1 px-3 mt-4 flex items-center gap-3 bg-card min-h-0">
-                                        <Avatar className="h-10 w-10 shrink-0 border-2 border-muted">
+                                        <Avatar className="static h-10 w-10 shrink-0 border-2 border-muted">
                                             <AvatarImage
                                                 src={data.attributes?.avatar}
                                                 alt={data.name}
