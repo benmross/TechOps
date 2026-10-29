@@ -17,6 +17,7 @@
 */
 
 import { PEOPLEPORTAL_SERVER_ENDPOINT } from "@/commons/config";
+import { VirtualCardRequests } from "./VirtualCardRequests";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardPeopleInfo } from "@/components/fabric/DashboardPeopleInfo";
 import { DashboardPeopleList } from "@/components/fabric/DashboardPeopleList";
@@ -59,6 +60,10 @@ import { toast } from "sonner";
 
 const translateBreadcrumbPath = (path: string) => {
     switch (path) {
+        case "finance":
+            return "Finance";
+        case "cards":
+            return "Virtual Cards";
         case "org":
             return "Organization";
 
@@ -221,6 +226,12 @@ export const CorpDashboard = () => {
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-6 pt-0 min-h-0 overflow-y-auto">
                     <Routes>
+                        {import.meta.env.DEV && (
+                            <Route
+                                path="/finance/cards"
+                                element={<VirtualCardRequests />}
+                            />
+                        )}
                         <Route
                             path="/"
                             element={<Navigate to="/org/people" />}

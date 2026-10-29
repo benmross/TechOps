@@ -21,6 +21,7 @@ import { UserOnboarding } from "./pages/UserOnboarding";
 import { Toaster } from "sonner";
 import { CorpDashboard } from "./pages/CorpDashboard";
 import { ThemeProvider } from "./components/fabric/ThemeProvider";
+import { VirtualCardsPreview } from "./pages/VirtualCardRequests";
 import { ATSDashboard } from "./pages/ATSDashboard";
 
 function App() {
@@ -29,6 +30,12 @@ function App() {
             <div className="flex flex-col h-full w-full">
                 <Toaster richColors position="top-right" />
                 <Routes>
+                    {import.meta.env.DEV && (
+                        <Route
+                            path="/dev/finance/cards"
+                            element={<VirtualCardsPreview />}
+                        />
+                    )}
                     <Route path="/*" element={<CorpDashboard />} />
                     <Route
                         path="/onboard/:onboardId/*"

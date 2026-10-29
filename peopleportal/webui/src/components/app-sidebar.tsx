@@ -19,6 +19,7 @@
 import { Link } from "react-router-dom";
 import * as React from "react";
 import {
+    CreditCard,
     ArchiveIcon,
     LayoutListIcon,
     BookOpen,
@@ -111,6 +112,22 @@ const buildNavMain = (isExecutive: boolean) => {
         },
     ];
 
+    if (import.meta.env.DEV) {
+        sections.splice(1, 0, {
+            title: "Finance (preview)",
+            url: "#",
+            icon: CreditCard,
+            isActive: true,
+            items: [
+                {
+                    icon: CreditCard,
+                    title: "Virtual cards",
+                    url: "/dev/finance/cards",
+                },
+            ],
+        });
+    }
+
     if (isExecutive) {
         sections.push({
             title: "Executive",
@@ -170,7 +187,6 @@ export function AppSidebar({
                         name: props.userInfo.name,
                         email: props.userInfo.email,
                         avatar: props.userInfo.avatar,
-                        pk: props.userInfo.pk,
                     }}
                 />
             </SidebarFooter>
