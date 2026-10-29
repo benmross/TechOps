@@ -1,0 +1,10 @@
+{
+    "remote.autoForwardPorts": true,
+    "remote.portsAttributes": {
+        "5180": {
+            "label": "Virtual card UI preview",
+            "protocol": "http",
+            "onAutoForward": "notify"
+        }
+    }
+}

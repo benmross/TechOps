@@ -9,3 +9,7 @@ Approved allocations reserve the demo club budget. Card tiles separate settled s
 Integration requires club Issuing eligibility and account ownership confirmation, server-side membership and finance permissions, atomic budget reservation, idempotent issuance, verified webhooks, reconciliation and authorized Stripe Issuing Elements. Configured spending limits must not be described as guaranteed isolated balances. The preview routes and navigation are disabled outside development builds.
 
 Run the existing pplui build and test targets with Nx. The source also removes an upstream duplicate pk property in the sidebar user object, which otherwise blocks TypeScript compilation.
+
+## VS Code Remote SSH
+
+Open this worktree as the remote folder. Workspace settings enable automatic port forwarding and label port 5180 as Virtual card UI preview. The persistent appdev-cards-preview user service serves the preview at http://localhost:5180/dev/finance/cards. If it is not listed automatically, use Forward a Port in the Ports panel and enter 5180. You can right-click its entry and choose Change Local Address Port to use a different local port while the service continues listening on remote port 5180.
