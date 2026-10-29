@@ -48,6 +48,7 @@ type Request = {
     vendor: string;
     custodian: string;
     amount: number;
+    approvedAmount?: number;
     spent: number;
     held: number;
     status: Status;
@@ -57,6 +58,8 @@ type Request = {
     note?: string;
     history: string[];
 };
+const allocation = (request: Request) =>
+    request.approvedAmount ?? request.amount;
 const money = (cents: number) =>
     new Intl.NumberFormat("en-US", {
         style: "currency",
@@ -166,7 +169,7 @@ export function VirtualCardRequests() {
         (r) => r.status === "Active" || r.status === "Frozen",
     );
     const pending = requests.filter((r) => r.status === "Pending");
-    const allocated = active.reduce((sum, r) => sum + r.amount, 0);
+    const allocated = active.reduce((sum, r) => sum + allocation(r), 0);
     const settled = active.reduce((sum, r) => sum + r.spent, 0);
     const holds = active.reduce((sum, r) => sum + r.held, 0);
     const unallocated = 200000 - allocated;
@@ -218,7 +221,7 @@ export function VirtualCardRequests() {
             detail.id,
             {
                 status: "Active",
-                amount,
+                approvedAmount: amount,
                 last4: "0000",
                 note: reviewNote.trim(),
             },
@@ -341,7 +344,7 @@ export function VirtualCardRequests() {
                     {
                         label: "Awaiting approval",
                         amount: pending.reduce((s, r) => s + r.amount, 0),
-                        caption: `${pending.length} requests · funds not reserved yet`,
+                        caption: `${pending.length} {pending.length === 1 ? "request" : "requests"} · funds not reserved yet`,
                         icon: ShieldCheck,
                     },
                 ].map((item) => (
@@ -372,7 +375,7 @@ export function VirtualCardRequests() {
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {active.map((r) => {
-                        const remaining = r.amount - r.spent - r.held;
+                        const remaining = allocation(r) - r.spent - r.held;
                         return (
                             <button
                                 key={r.id}
@@ -410,7 +413,7 @@ export function VirtualCardRequests() {
                                         </p>
                                     </div>
                                     <span className="text-xs text-muted-foreground">
-                                        of {money(r.amount)}
+                                        of {money(allocation(r))}
                                         {r.cadence === "Monthly"
                                             ? " / month"
                                             : " total"}
@@ -420,13 +423,13 @@ export function VirtualCardRequests() {
                                     <div
                                         className="bg-violet-500"
                                         style={{
-                                            width: `${(r.spent / r.amount) * 100}%`,
+                                            width: `${(r.spent / allocation(r)) * 100}%`,
                                         }}
                                     />
                                     <div
                                         className="bg-amber-400"
                                         style={{
-                                            width: `${(r.held / r.amount) * 100}%`,
+                                            width: `${(r.held / allocation(r)) * 100}%`,
                                         }}
                                     />
                                 </div>
@@ -750,7 +753,7 @@ export function VirtualCardRequests() {
                                                 Remaining
                                                 <strong className="mt-1 block">
                                                     {money(
-                                                        detail.amount -
+                                                        allocation(detail) -
                                                             detail.spent -
                                                             detail.held,
                                                     )}
