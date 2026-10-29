@@ -344,7 +344,7 @@ export function VirtualCardRequests() {
                     {
                         label: "Awaiting approval",
                         amount: pending.reduce((s, r) => s + r.amount, 0),
-                        caption: `${pending.length} {pending.length === 1 ? "request" : "requests"} · funds not reserved yet`,
+                        caption: `${pending.length} ${pending.length === 1 ? "request" : "requests"} · funds not reserved yet`,
                         icon: ShieldCheck,
                     },
                 ].map((item) => (
