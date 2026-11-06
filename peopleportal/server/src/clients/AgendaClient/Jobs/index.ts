@@ -1,3 +1,4 @@
+import { runFinanceMaintenance } from "../../../finance/service";
 import { Job, JobDefinition } from "agenda";
 import { DateTime } from "luxon";
 import { EmailClient } from "../../EmailClient";
@@ -165,6 +166,10 @@ export const DefinedJobs: Record<
         >;
     }
 > = {
+    financeMaintenance: {
+        workerFunction: async () => { await runFinanceMaintenance(); },
+        options: { concurrency: 1, lockLifetime: 600_000 },
+    },
     sendEventRemindersDaily: {
         workerFunction: async (job: Job<JobPayload>) => {
             const emailClient = new EmailClient();
@@ -315,6 +320,7 @@ export const DefinedJobs: Record<
 
 // Define any static, repeating jobs here
 export const RecurringJobs: RecurringJobSchedulingData[] = [
+    { jobName: "financeMaintenance", schedule: "1 minute" },
     {
         jobName: "sendEventRemindersDaily",
         schedule: "0 8 * * *", // 8 AM daily

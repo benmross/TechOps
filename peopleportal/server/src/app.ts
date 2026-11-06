@@ -46,6 +46,12 @@ import { agendaClient } from "./clients/AgendaClient";
 import { authenticateGiteaWebhook } from "./utils/gitea-webhook-auth";
 import { describeUnknownError } from "./utils/errors";
 
+import { financeWebhook } from "./finance/webhook";
+import { initializeFinanceModels } from "./finance/models";
+import { financeConfig } from "./finance/config";
+import { transaction } from "./finance/service";
+import { FinanceBudget } from "./finance/models";
+
 log.setLevel("info");
 
 assertRequiredEnvironment();
@@ -67,6 +73,8 @@ if (!process.env.PEOPLEPORTAL_TOKEN_SECRET) {
 
 const app = express();
 const PORT = envInt("PORT", 3000);
+
+app.use(financeWebhook);
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -137,6 +145,12 @@ ApiRouter.use(
 /* Register & Setup Catch All Route for Public Dir */
 RegisterRoutes(ApiRouter);
 app.use(ApiRouter);
+// Keep provider errors out of finance responses; SDK error objects can contain
+// account details. Expected validation/access errors use the standard handler.
+app.use("/api/finance", (err: unknown, req: Request, res: Response, next: NextFunction) => {
+    if (err instanceof ResourceAccessError || err instanceof ValidateError) return next(err);
+    res.status(503).json({ message: "Finance operation failed; retry or contact finance" });
+});
 
 app.get(["/onboard", "/onboard/*splat"], (req, res) => {
     res.sendFile(path.join(__dirname, "ui", "index.html"));
@@ -243,10 +257,16 @@ async function startup(): Promise<void> {
 
     /* Validate Database Connection */
     await mongoose.connect(process.env.PEOPLEPORTAL_MONGO_URL!);
+    if (process.env.PEOPLEPORTAL_FINANCE_ENABLED === "true") {
+        financeConfig();
+        await initializeFinanceModels();
+        // Fail startup clearly if finance is enabled against standalone Mongo.
+        await transaction(async (session) => FinanceBudget.findById("usd-test").session(session));
+    }
     log.info(`Server running at http://localhost:${PORT}`);
 
     // Agenda Client Singleton
-    await agendaClient.initialize();
+    await agendaClient.initialize(process.env.PEOPLEPORTAL_FINANCE_ENABLED === "true" ? "30 seconds" : undefined);
 }
 
 app.listen(PORT, () => {
