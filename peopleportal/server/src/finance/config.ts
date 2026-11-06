@@ -7,10 +7,14 @@ export function financeConfig() {
         throw new ResourceAccessError(503, "Finance integration is disabled");
     const key = process.env.STRIPE_SECRET_KEY ?? "";
     if (!/^(sk|rk)_test_/.test(key))
-        throw new ResourceAccessError(503, "Finance requires a Stripe test key");
+        throw new ResourceAccessError(
+            503,
+            "Finance requires a Stripe test key",
+        );
     const reviewers = new Set(
         (process.env.PEOPLEPORTAL_FINANCE_REVIEWER_PKS ?? "")
-            .split(",").filter((v) => /^\d+$/.test(v.trim()))
+            .split(",")
+            .filter((v) => /^\d+$/.test(v.trim()))
             .map((v) => Number(v.trim())),
     );
     return { key, reviewers };

@@ -1,7 +1,28 @@
-import { Body, Controller, Get, Path, Post, Put, Query, Request, Route, Security, SuccessResponse, Tags } from "tsoa";
+import {
+    Body,
+    Controller,
+    Get,
+    Path,
+    Post,
+    Put,
+    Query,
+    Request,
+    Route,
+    Security,
+    SuccessResponse,
+    Tags,
+} from "tsoa";
 import type { Request as ExpressRequest } from "express";
-import { financeActor, requireFinanceOrigin, requireReviewer } from "../finance/access";
-import { CreateFinanceRequest, FinanceService, reconcileFinanceRequest } from "../finance/service";
+import {
+    financeActor,
+    requireFinanceOrigin,
+    requireReviewer,
+} from "../finance/access";
+import {
+    CreateFinanceRequest,
+    FinanceService,
+    reconcileFinanceRequest,
+} from "../finance/service";
 
 @Route("/api/finance")
 @Tags("Finance (Stripe Issuing test mode)")
@@ -11,7 +32,10 @@ export class FinanceController extends Controller {
 
     @SuccessResponse(200)
     @Post("requests")
-    async create(@Request() req: ExpressRequest, @Body() body: CreateFinanceRequest) {
+    async create(
+        @Request() req: ExpressRequest,
+        @Body() body: CreateFinanceRequest,
+    ) {
         requireFinanceOrigin(req);
         return this.service.create(await financeActor(req), body);
     }
@@ -30,25 +54,44 @@ export class FinanceController extends Controller {
 
     @SuccessResponse(200)
     @Post("requests/{id}/approve")
-    async approve(@Request() req: ExpressRequest, @Path() id: string,
-        @Body() body: { approvedCents: number; note: string }) {
+    async approve(
+        @Request() req: ExpressRequest,
+        @Path() id: string,
+        @Body() body: { approvedCents: number; note: string },
+    ) {
         requireFinanceOrigin(req);
-        return this.service.approve(await financeActor(req), id, body.approvedCents, body.note);
+        return this.service.approve(
+            await financeActor(req),
+            id,
+            body.approvedCents,
+            body.note,
+        );
     }
 
     @SuccessResponse(200)
     @Post("requests/{id}/decline")
-    async decline(@Request() req: ExpressRequest, @Path() id: string, @Body() body: { note: string }) {
+    async decline(
+        @Request() req: ExpressRequest,
+        @Path() id: string,
+        @Body() body: { note: string },
+    ) {
         requireFinanceOrigin(req);
         return this.service.decline(await financeActor(req), id, body.note);
     }
 
     @SuccessResponse(200)
     @Put("requests/{id}/card-status")
-    async cardStatus(@Request() req: ExpressRequest, @Path() id: string,
-        @Body() body: { status: "active" | "inactive" | "canceled" }) {
+    async cardStatus(
+        @Request() req: ExpressRequest,
+        @Path() id: string,
+        @Body() body: { status: "active" | "inactive" | "canceled" },
+    ) {
         requireFinanceOrigin(req);
-        return this.service.setCardStatus(await financeActor(req), id, body.status);
+        return this.service.setCardStatus(
+            await financeActor(req),
+            id,
+            body.status,
+        );
     }
 
     @SuccessResponse(200)
@@ -70,15 +113,26 @@ export class FinanceController extends Controller {
     /** Exchange a Stripe.js nonce; PAN/CVC never pass through this server. */
     @SuccessResponse(200)
     @Post("requests/{id}/ephemeral-key")
-    async ephemeralKey(@Request() req: ExpressRequest, @Path() id: string, @Body() body: { nonce: string }) {
+    async ephemeralKey(
+        @Request() req: ExpressRequest,
+        @Path() id: string,
+        @Body() body: { nonce: string },
+    ) {
         requireFinanceOrigin(req);
         req.res?.setHeader("Cache-Control", "no-store");
-        return this.service.ephemeralKey(await financeActor(req), id, body.nonce);
+        return this.service.ephemeralKey(
+            await financeActor(req),
+            id,
+            body.nonce,
+        );
     }
 
     @SuccessResponse(200)
     @Put("budget")
-    async setBudget(@Request() req: ExpressRequest, @Body() body: { totalCents: number }) {
+    async setBudget(
+        @Request() req: ExpressRequest,
+        @Body() body: { totalCents: number },
+    ) {
         requireFinanceOrigin(req);
         return this.service.setBudget(await financeActor(req), body.totalCents);
     }
@@ -86,9 +140,16 @@ export class FinanceController extends Controller {
     /** Map a person to a cardholder already onboarded by finance in Stripe. */
     @SuccessResponse(200)
     @Put("cardholders/{userPk}")
-    async cardholder(@Request() req: ExpressRequest, @Path() userPk: number,
-        @Body() body: { stripeCardholderId: string }) {
+    async cardholder(
+        @Request() req: ExpressRequest,
+        @Path() userPk: number,
+        @Body() body: { stripeCardholderId: string },
+    ) {
         requireFinanceOrigin(req);
-        return this.service.assignCardholder(await financeActor(req), userPk, body.stripeCardholderId);
+        return this.service.assignCardholder(
+            await financeActor(req),
+            userPk,
+            body.stripeCardholderId,
+        );
     }
 }

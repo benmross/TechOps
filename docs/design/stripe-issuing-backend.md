@@ -174,7 +174,7 @@ records only the access action, never the nonce or secret.
 
 ## Verification
 
-Run npm exec nx run pplserver:test. Finance integration tests use an isolated
+Use Node 22 and run npm exec nx run pplserver:test. Finance integration tests use an isolated
 MongoDB replica set, the real generated routes and SDK signature verification,
 and an injected Stripe transport. They cover concurrency, authorization, request
 idempotency, uncertain issuance, partial approvals, expiry, freezes, membership
