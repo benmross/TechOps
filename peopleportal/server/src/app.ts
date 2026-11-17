@@ -41,7 +41,7 @@ import { AuthentikClient } from "./clients/AuthentikClient";
 import { RedisClient } from "./clients/RedisClient";
 import { CustomValidationError, ResourceAccessError } from "./utils/errors";
 import { ENABLED_SHARED_RESOURCES } from "./config";
-import log from "loglevel";
+import { logger, requestLogger } from "./utils/logger";
 import { agendaClient } from "./clients/AgendaClient";
 import { authenticateGiteaWebhook } from "./utils/gitea-webhook-auth";
 import { describeUnknownError } from "./utils/errors";
@@ -52,10 +52,9 @@ import { financeConfig } from "./finance/config";
 import { transaction } from "./finance/service";
 import { FinanceBudget } from "./finance/models";
 
-log.setLevel("info");
 
 assertRequiredEnvironment();
-log.info(
+logger.info(
     `Environment: ${ENVIRONMENT}${loadedEnvFiles.length ? ` (loaded ${loadedEnvFiles.join(", ")})` : ""}`,
 );
 
@@ -66,7 +65,7 @@ if (!process.env.PEOPLEPORTAL_TOKEN_SECRET) {
         throw new Error("PEOPLEPORTAL_TOKEN_SECRET must be set in production");
 
     process.env.PEOPLEPORTAL_TOKEN_SECRET = generateSecureRandomString(16);
-    log.warn(
+    logger.warn(
         "PEOPLEPORTAL_TOKEN_SECRET is unset; generated an ephemeral one. Sessions will not survive a restart.",
     );
 }
@@ -74,6 +73,8 @@ if (!process.env.PEOPLEPORTAL_TOKEN_SECRET) {
 const app = express();
 const PORT = envInt("PORT", 3000);
 
+/* Request logging covers webhooks without parsing their signed raw body. */
+app.use(requestLogger);
 app.use(financeWebhook);
 
 app.use(express.urlencoded({ extended: true }));
@@ -177,7 +178,20 @@ app.use(function errorHandler(
     }
 
     if (err instanceof ValidateError) {
-        console.warn(`Caught Validation Error for ${req.path}:`, err.fields);
+        /* Log which fields failed and why, never the submitted values: a
+           rejected login or signup body would otherwise put passwords in logs. */
+        logger.warn(
+            {
+                route: req.path,
+                fields: Object.fromEntries(
+                    Object.entries(err.fields).map(([name, f]) => [
+                        name,
+                        f.message,
+                    ]),
+                ),
+            },
+            "Request validation failed",
+        );
         return res.status(422).json({
             message: "Validation Failed",
             details: err?.fields,
@@ -193,8 +207,29 @@ app.use(function errorHandler(
         });
     }
 
+    /* Errors raised by body-parser and similar middleware (malformed JSON,
+       oversized bodies) carry the client's 4xx status. They are the caller's
+       mistake, so answer with that status and keep the error out of the logs:
+       it holds the raw request body. */
+    const clientStatus =
+        err instanceof Error
+            ? ((err as { status?: unknown }).status ??
+              (err as { statusCode?: unknown }).statusCode)
+            : undefined;
+    if (
+        typeof clientStatus === "number" &&
+        clientStatus >= 400 &&
+        clientStatus < 500
+    ) {
+        logger.warn(
+            { route: req.path, status: clientStatus },
+            "Request rejected before reaching a handler",
+        );
+        return res.status(clientStatus).json({ message: "Bad Request" });
+    }
+
     if (err instanceof Error) {
-        console.error(err);
+        logger.error({ err, route: req.path }, "Unhandled error in request");
         return res.status(500).json({
             message: err.message ?? "Unknown Internal Server Error",
         });
@@ -234,23 +269,23 @@ async function startup(): Promise<void> {
     try {
         await authentikClient.validateServiceExistance();
     } catch (e: unknown) {
-        log.error(
-            "Service team validation failed; executive and events features may be unavailable:",
-            describeUnknownError(e),
+        logger.error(
+            { err: describeUnknownError(e) },
+            "Service team validation failed; executive and events features may be unavailable",
         );
     }
 
     /* Initialize Shared Resource Clients. One integration failing to start must
      not stop the server from serving, so each is isolated. */
     for (const client in ENABLED_SHARED_RESOURCES) {
-        log.info(`Initializing Shared Resource Client: ${client}`);
+        logger.info({ client }, "Initializing shared resource client");
         const clientInstance = ENABLED_SHARED_RESOURCES[client]!;
         try {
             await clientInstance.init();
         } catch (e: unknown) {
-            log.error(
-                `Failed to initialize shared resource client "${client}", continuing without it:`,
-                describeUnknownError(e),
+            logger.error(
+                { client, err: describeUnknownError(e) },
+                "Failed to initialize shared resource client, continuing without it",
             );
         }
     }
@@ -263,7 +298,7 @@ async function startup(): Promise<void> {
         // Fail startup clearly if finance is enabled against standalone Mongo.
         await transaction(async (session) => FinanceBudget.findById("usd-test").session(session));
     }
-    log.info(`Server running at http://localhost:${PORT}`);
+    logger.info({ port: PORT }, "Server running");
 
     // Agenda Client Singleton
     await agendaClient.initialize(process.env.PEOPLEPORTAL_FINANCE_ENABLED === "true" ? "30 seconds" : undefined);
@@ -275,8 +310,10 @@ app.listen(PORT, () => {
        discovery, Redis, Mongo, the job scheduler) did not come up. Exit
        deliberately with a readable reason rather than dying on an unhandled
        rejection halfway through boot. */
-        log.error("Fatal error during startup:", describeUnknownError(e));
-        if (e instanceof Error && e.stack) log.error(e.stack);
+        logger.fatal(
+            { err: e instanceof Error ? e : describeUnknownError(e) },
+            "Fatal error during startup",
+        );
         process.exit(1);
     });
 });
