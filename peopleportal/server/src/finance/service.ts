@@ -53,6 +53,8 @@ export interface FinanceRequestView {
     desiredCardStatus: string;
     needsAttention: boolean;
     createdAt: string;
+    heldCents?: number;
+    settledCents?: number;
 }
 
 function view(
@@ -228,7 +230,44 @@ export class FinanceService {
         })
             .sort({ _id: -1 })
             .limit(50);
-        return records.map(view);
+        // One bounded aggregate for this authorized page, rather than one
+        // request per tile. Never include another requester's card IDs.
+        const cardIds = records.flatMap((record) =>
+            record.stripeCardId ? [record.stripeCardId] : [],
+        );
+        const totals = cardIds.length
+            ? await FinanceEntry.aggregate([
+                  { $match: { cardId: { $in: cardIds } } },
+                  {
+                      $group: {
+                          _id: { cardId: "$cardId", kind: "$kind" },
+                          amount: { $sum: "$amount" },
+                      },
+                  },
+              ])
+            : [];
+        const byCard = new Map<
+            string,
+            { heldCents: number; settledCents: number }
+        >();
+        for (const total of totals) {
+            const current = byCard.get(total._id.cardId) ?? {
+                heldCents: 0,
+                settledCents: 0,
+            };
+            if (total._id.kind === "authorization")
+                current.heldCents = Number(total.amount);
+            if (total._id.kind === "transaction")
+                current.settledCents = -Number(total.amount);
+            byCard.set(total._id.cardId, current);
+        }
+        return records.map((record) => ({
+            ...view(record),
+            ...(byCard.get(record.stripeCardId ?? "") ?? {
+                heldCents: 0,
+                settledCents: 0,
+            }),
+        }));
     }
 
     async detail(actor: FinanceActor, id: string) {

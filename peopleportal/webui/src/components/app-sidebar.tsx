@@ -122,7 +122,7 @@ const buildNavMain = (isExecutive: boolean) => {
                 {
                     icon: CreditCard,
                     title: "Virtual cards",
-                    url: "/dev/finance/cards",
+                    url: "/finance/cards",
                 },
             ],
         });

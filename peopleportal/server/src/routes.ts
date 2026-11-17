@@ -864,6 +864,8 @@ const models: TsoaRoute.Models = {
             "desiredCardStatus": {"dataType":"string","required":true},
             "needsAttention": {"dataType":"boolean","required":true},
             "createdAt": {"dataType":"string","required":true},
+            "heldCents": {"dataType":"double"},
+            "settledCents": {"dataType":"double"},
         },
         "additionalProperties": false,
     },

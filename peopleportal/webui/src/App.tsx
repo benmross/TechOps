@@ -16,12 +16,11 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { UserOnboarding } from "./pages/UserOnboarding";
 import { Toaster } from "sonner";
 import { CorpDashboard } from "./pages/CorpDashboard";
 import { ThemeProvider } from "./components/fabric/ThemeProvider";
-import { VirtualCardsPreview } from "./pages/VirtualCardRequests";
 import { ATSDashboard } from "./pages/ATSDashboard";
 
 function App() {
@@ -33,7 +32,7 @@ function App() {
                     {import.meta.env.DEV && (
                         <Route
                             path="/dev/finance/cards"
-                            element={<VirtualCardsPreview />}
+                            element={<Navigate to="/finance/cards" replace />}
                         />
                     )}
                     <Route path="/*" element={<CorpDashboard />} />

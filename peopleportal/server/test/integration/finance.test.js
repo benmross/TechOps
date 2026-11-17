@@ -781,3 +781,38 @@ test("team-envelope migration preserves old allocations and is idempotent", asyn
     assert.equal(team.totalCents, 10000);
     assert.equal(team.reservedCents, 10000);
 });
+
+test("card-list totals match reconciled detail and remain requester-scoped", async () => {
+    const card = await issued();
+    await FinanceEntry.create([
+        {
+            stripeId: "ipttx_listing",
+            kind: "transaction",
+            cardId: card.stripeCardId,
+            amount: -7600,
+            currency: "usd",
+        },
+        {
+            stripeId: "iauth_listing",
+            kind: "authorization",
+            cardId: card.stripeCardId,
+            amount: 1200,
+            currency: "usd",
+        },
+        {
+            stripeId: "ipttx_other",
+            kind: "transaction",
+            cardId: "ic_somebodyelse",
+            amount: -99999,
+            currency: "usd",
+        },
+    ]);
+    const list = await service.list(owner);
+    assert.equal(list.length, 1);
+    assert.equal(list[0].settledCents, 7600);
+    assert.equal(list[0].heldCents, 1200);
+    const detail = await service.detail(owner, list[0].id);
+    assert.equal(list[0].settledCents, detail.settledCents);
+    assert.equal(list[0].heldCents, detail.heldCents);
+    assert.deepEqual(await service.list({ pk: 303, reviewer: false }), []);
+});

@@ -6,7 +6,10 @@ version and the Issuing Elements ephemeral-key version are 2026-10-28.endive.
 The authenticated Finance page calls the persisted finance API for requests,
 review, team budgets, cardholder mapping, card controls and spending/audit history.
 Card details use Stripe.js Issuing Elements with custodian-only ephemeral keys.
-The in-memory demonstration is confined to the development preview route.
+The old standalone in-memory demonstration has been removed. Both navigation and
+the old development URL lead to the same API-connected page. Card tiles use
+authorized list-API spending totals; monthly tiles distinguish the monthly
+limit from the full reserved commitment and lifetime spending.
 See `organization-spending-design.md` for the budget model and production gates.
 
 ## Configuration

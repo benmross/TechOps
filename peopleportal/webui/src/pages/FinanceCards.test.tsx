@@ -124,7 +124,9 @@ describe("connected finance screen", () => {
     it("uses server role without a preview switch or member review controls", async () => {
         render(<FinanceCards />);
         await userEvent.click(
-            await screen.findByRole("button", { name: /Project hosting/ }),
+            await screen.findByRole("button", {
+                name: /^View request: Project hosting/,
+            }),
         );
         await screen.findByText("Settled spending");
         expect(
@@ -135,7 +137,9 @@ describe("connected finance screen", () => {
     });
     it("keeps a creation idempotency key after a failed request and sends directory team IDs", async () => {
         render(<FinanceCards />);
-        await screen.findByRole("button", { name: /Project hosting/ });
+        await screen.findByRole("button", {
+            name: /^View request: Project hosting/,
+        });
         await userEvent.click(
             screen.getByRole("button", { name: "Request a card" }),
         );
@@ -178,7 +182,9 @@ describe("connected finance screen", () => {
         userPk = 202;
         render(<FinanceCards />);
         await userEvent.click(
-            await screen.findByRole("button", { name: /Project hosting/ }),
+            await screen.findByRole("button", {
+                name: /^View request: Project hosting/,
+            }),
         );
         const amount = await screen.findByLabelText("Approve amount (USD)");
         await userEvent.clear(amount);
@@ -211,7 +217,9 @@ describe("connected finance screen", () => {
         reviewer = true;
         render(<FinanceCards />);
         await userEvent.click(
-            await screen.findByRole("button", { name: /Project hosting/ }),
+            await screen.findByRole("button", {
+                name: /^View request: Project hosting/,
+            }),
         );
         await screen.findByText("Settled spending");
         expect(
@@ -231,7 +239,9 @@ describe("connected finance screen", () => {
         };
         render(<FinanceCards />);
         await userEvent.click(
-            await screen.findByRole("button", { name: /Project hosting/ }),
+            await screen.findByRole("button", {
+                name: /^View request: Project hosting/,
+            }),
         );
         await userEvent.click(
             await screen.findByRole("button", { name: "Freeze card" }),

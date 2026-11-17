@@ -36,6 +36,7 @@ import {
     type FinanceBudget,
     type FinanceTeamBudget,
 } from "@/commons/finance-api";
+import { FinanceCardTile } from "@/components/fabric/FinanceCardTile";
 import { IssuingCardDetails } from "@/components/fabric/IssuingCardDetails";
 
 const money = (cents: number) =>
@@ -335,6 +336,51 @@ export function FinanceCards() {
                     canceled allocations remain reserved.
                 </p>
             )}
+            {!loading && !error && (
+                <section
+                    className="space-y-4"
+                    aria-labelledby="approved-cards-heading"
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2
+                            id="approved-cards-heading"
+                            className="text-lg font-semibold"
+                        >
+                            Approved cards
+                        </h2>
+                        <span className="text-xs text-muted-foreground">
+                            USD · Card commitments and spending
+                        </span>
+                    </div>
+                    <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {requests
+                            .filter(
+                                (r) =>
+                                    r.status === "issued" &&
+                                    r.cardStatus !== "canceled",
+                            )
+                            .map((r) => (
+                                <FinanceCardTile
+                                    key={r.id}
+                                    request={r}
+                                    team={label(r)}
+                                    own={r.requesterPk === context?.userPk}
+                                    onOpen={() => setSelected(r.id)}
+                                />
+                            ))}
+                    </div>
+                    {!requests.some(
+                        (r) =>
+                            r.status === "issued" &&
+                            r.cardStatus !== "canceled",
+                    ) && (
+                        <p className="text-sm text-muted-foreground">
+                            Issued cards will appear here after finance approval
+                            and Stripe issuance.
+                        </p>
+                    )}
+                </section>
+            )}
             {context?.reviewer && (
                 <section
                     className="space-y-4 rounded-xl border p-5"
@@ -430,6 +476,7 @@ export function FinanceCards() {
                     </div>
                     {visible.map((r) => (
                         <button
+                            aria-label={`View request: ${r.purpose}`}
                             key={r.id}
                             onClick={() => setSelected(r.id)}
                             className="flex w-full flex-wrap items-center justify-between gap-4 border-b p-5 text-left hover:bg-muted/40"

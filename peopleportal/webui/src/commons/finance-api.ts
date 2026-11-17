@@ -19,6 +19,8 @@ export interface FinanceRequest {
     cardStatus: string | null;
     desiredCardStatus: string;
     needsAttention: boolean;
+    heldCents?: number;
+    settledCents?: number;
 }
 export interface FinanceContext {
     userPk: number;
