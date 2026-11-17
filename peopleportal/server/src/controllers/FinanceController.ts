@@ -13,8 +13,10 @@ import {
     Tags,
 } from "tsoa";
 import type { Request as ExpressRequest } from "express";
+import { AuthentikClient } from "../clients/AuthentikClient";
 import {
     financeActor,
+    requireTeamMember,
     requireFinanceOrigin,
     requireReviewer,
 } from "../finance/access";
@@ -29,6 +31,62 @@ import {
 @Security("oidc")
 export class FinanceController extends Controller {
     private service = new FinanceService();
+
+    /** Current server-authorized role and verified subteam memberships. */
+    @SuccessResponse(200)
+    @Get("context")
+    async context(@Request() req: ExpressRequest) {
+        const actor = await financeActor(req);
+        const directory = new AuthentikClient();
+        const user = await directory.getUserInfo(actor.pk);
+        const { memberships } = await directory.getTeamMembershipsForUsername(
+            user.username,
+        );
+        const teams: {
+            rootTeamPk: string;
+            subteamPk: string;
+            team: string;
+            subteam: string;
+        }[] = [];
+        for (const membership of memberships) {
+            if (
+                !membership.parent ||
+                membership.flaggedForDeletion ||
+                membership.archivedAt
+            )
+                continue;
+            // Use the same authoritative checks as request creation. Directory
+            // errors fail the context load rather than fabricating empty access.
+            try {
+                await requireTeamMember(
+                    actor.pk,
+                    membership.parent,
+                    membership.pk,
+                );
+            } catch (error) {
+                if ((error as { status?: number }).status === 403) continue;
+                throw error;
+            }
+            teams.push({
+                rootTeamPk: membership.parent,
+                subteamPk: membership.pk,
+                team:
+                    membership.parentFriendlyName ||
+                    membership.parentName ||
+                    membership.parent,
+                subteam: membership.friendlyName || membership.name,
+            });
+        }
+        const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+        return {
+            userPk: actor.pk,
+            reviewer: actor.reviewer,
+            teams,
+            publishableKey: publishableKey?.startsWith("pk_test_")
+                ? publishableKey
+                : null,
+        };
+    }
 
     @SuccessResponse(200)
     @Post("requests")
@@ -135,6 +193,27 @@ export class FinanceController extends Controller {
     ) {
         requireFinanceOrigin(req);
         return this.service.setBudget(await financeActor(req), body.totalCents);
+    }
+
+    @SuccessResponse(200)
+    @Get("team-budgets")
+    async teamBudgets(@Request() req: ExpressRequest) {
+        return this.service.teamBudgets(await financeActor(req));
+    }
+
+    @SuccessResponse(200)
+    @Put("team-budgets/{rootTeamPk}")
+    async setTeamBudget(
+        @Request() req: ExpressRequest,
+        @Path() rootTeamPk: string,
+        @Body() body: { totalCents: number },
+    ) {
+        requireFinanceOrigin(req);
+        return this.service.setTeamBudget(
+            await financeActor(req),
+            rootTeamPk,
+            body.totalCents,
+        );
     }
 
     /** Map a person to a cardholder already onboarded by finance in Stripe. */

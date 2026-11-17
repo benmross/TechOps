@@ -17,7 +17,7 @@
 */
 
 import { PEOPLEPORTAL_SERVER_ENDPOINT } from "@/commons/config";
-import { VirtualCardRequests } from "./VirtualCardRequests";
+import { FinanceCards } from "./FinanceCards";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardPeopleInfo } from "@/components/fabric/DashboardPeopleInfo";
 import { DashboardPeopleList } from "@/components/fabric/DashboardPeopleList";
@@ -229,7 +229,7 @@ export const CorpDashboard = () => {
                         {import.meta.env.DEV && (
                             <Route
                                 path="/finance/cards"
-                                element={<VirtualCardRequests />}
+                                element={<FinanceCards />}
                             />
                         )}
                         <Route

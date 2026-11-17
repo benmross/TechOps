@@ -26,6 +26,7 @@ const { ResourceAccessError } = require("../../dist/utils/errors");
 const {
     FinanceRequest,
     FinanceBudget,
+    FinanceTeamBudget,
     FinanceCardholder,
     FinanceEntry,
     FinanceAudit,
@@ -126,9 +127,22 @@ test.before(async () => {
         async getUserInfo(pk) {
             return {
                 pk,
+                username: `user${pk}`,
                 active: activeUsers.has(pk),
                 attributes: {},
                 groups: [],
+            };
+        }
+        async getTeamMembershipsForUsername() {
+            return {
+                memberships: [
+                    {
+                        pk: "sub",
+                        parent: "root",
+                        name: "Engineering",
+                        parentFriendlyName: "Test team",
+                    },
+                ],
             };
         }
         async getGroupInfo(pk) {
@@ -183,6 +197,7 @@ test.beforeEach(async () => {
     stripe = fakeStripe();
     for (const model of [
         FinanceRequest,
+        FinanceTeamBudget,
         FinanceCardholder,
         FinanceEntry,
         FinanceAudit,
@@ -191,8 +206,21 @@ test.beforeEach(async () => {
         await model.deleteMany({});
     await FinanceBudget.updateOne(
         { _id: "usd-test" },
-        { $set: { totalCents: 100000, reservedCents: 0 } },
+        {
+            $set: {
+                totalCents: 100000,
+                reservedCents: 0,
+                teamAllocatedCents: 100000,
+                envelopeVersion: 1,
+            },
+        },
     );
+    await FinanceTeamBudget.create({
+        _id: "root",
+        name: "Test team",
+        totalCents: 100000,
+        reservedCents: 0,
+    });
     await FinanceCardholder.create({
         userPk: owner.pk,
         stripeCardholderId: "ich_fixture",
@@ -674,4 +702,82 @@ test("webhook HTTP endpoint verifies the original signed bytes and rejects tampe
         .set("Stripe-Signature", liveSignature)
         .send(live)
         .expect(400);
+});
+
+test("context exposes server role and verified memberships without secrets", async () => {
+    const response = await request(app)
+        .get("/api/finance/context")
+        .set("x-test-user", String(owner.pk))
+        .expect(200);
+    assert.equal(response.body.userPk, owner.pk);
+    assert.equal(response.body.reviewer, false);
+    assert.equal(response.body.teams[0].subteamPk, "sub");
+    assert.equal(response.body.publishableKey, null);
+    membershipAllowed = false;
+    const revoked = await request(app)
+        .get("/api/finance/context")
+        .set("x-test-user", String(owner.pk))
+        .expect(200);
+    assert.deepEqual(revoked.body.teams, []);
+});
+
+test("team ceiling bounds concurrent approvals and rolls back failed reservations", async () => {
+    await service.setTeamBudget(reviewer, "root", 15000);
+    const a = await service.create(owner, input());
+    const b = await service.create(owner, input());
+    const outcomes = await Promise.allSettled(
+        [a, b].map((row) =>
+            service.approve(reviewer, row.id, 10000, "Project costs", stripe),
+        ),
+    );
+    assert.equal(outcomes.filter((r) => r.status === "fulfilled").length, 1);
+    assert.equal(
+        (await FinanceTeamBudget.findById("root")).reservedCents,
+        10000,
+    );
+    assert.equal(
+        (await FinanceBudget.findById("usd-test")).reservedCents,
+        10000,
+    );
+    await assert.rejects(
+        service.setTeamBudget(reviewer, "root", 5000),
+        /committed/,
+    );
+});
+
+test("team ceilings cannot overpromise club funds or bypass reviewer access", async () => {
+    await assert.rejects(
+        service.setTeamBudget(owner, "root", 50000),
+        /reviewer/,
+    );
+    await assert.rejects(
+        service.setTeamBudget(reviewer, "root", 100001),
+        /club/,
+    );
+    await assert.rejects(service.setBudget(reviewer, 99999), /committed/);
+    await service.setTeamBudget(reviewer, "root", 0);
+    const row = await service.create(owner, input());
+    await assert.rejects(
+        service.approve(reviewer, row.id, 10000, "Project costs", stripe),
+        /team allocation/,
+    );
+    assert.equal((await FinanceBudget.findById("usd-test")).reservedCents, 0);
+});
+
+test("team-envelope migration preserves old allocations and is idempotent", async () => {
+    await approved();
+    await FinanceTeamBudget.deleteMany({});
+    await FinanceBudget.updateOne(
+        { _id: "usd-test" },
+        { $unset: { envelopeVersion: 1, teamAllocatedCents: 1 } },
+    );
+    await models.initializeFinanceModels();
+    await models.initializeFinanceModels();
+    assert.equal(
+        (await FinanceBudget.findById("usd-test")).teamAllocatedCents,
+        10000,
+    );
+    const team = await FinanceTeamBudget.findById("root");
+    assert.equal(team.totalCents, 10000);
+    assert.equal(team.reservedCents, 10000);
 });

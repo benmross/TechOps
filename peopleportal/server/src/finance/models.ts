@@ -1,7 +1,11 @@
 import { Schema, model } from "mongoose";
 
 export type FinanceStatus =
-    "pending" | "approved" | "issued" | "declined" | "expired";
+    | "pending"
+    | "approved"
+    | "issued"
+    | "declined"
+    | "expired";
 export interface RequestRecord {
     requesterPk: number;
     rootTeamPk: string;
@@ -91,6 +95,22 @@ export const FinanceBudget = model(
             _id: { type: String, default: "usd-test" },
             totalCents: { type: Number, required: true, default: 0 },
             reservedCents: { type: Number, required: true, default: 0 },
+            teamAllocatedCents: { type: Number, required: true, default: 0 },
+            envelopeVersion: Number,
+        },
+        { timestamps: true },
+    ),
+);
+
+// Root teams share one envelope across every subteam, card and custodian.
+export const FinanceTeamBudget = model(
+    "FinanceTeamBudget",
+    new Schema(
+        {
+            _id: { type: String, required: true },
+            name: { type: String, required: true },
+            totalCents: { type: Number, required: true },
+            reservedCents: { type: Number, required: true, default: 0 },
         },
         { timestamps: true },
     ),
@@ -156,6 +176,7 @@ export async function initializeFinanceModels() {
     await Promise.all([
         FinanceRequest.init(),
         FinanceBudget.init(),
+        FinanceTeamBudget.init(),
         FinanceCardholder.init(),
         FinanceAudit.init(),
         FinanceEntry.init(),
@@ -166,4 +187,57 @@ export async function initializeFinanceModels() {
         { $setOnInsert: { totalCents: 0, reservedCents: 0 } },
         { upsert: true },
     );
+    // Additive, resumable migration: preserve every existing reservation. The
+    // shared budget document serializes this with other startup instances.
+    const session = await FinanceBudget.startSession();
+    try {
+        await session.withTransaction(async () => {
+            const budget =
+                await FinanceBudget.findById("usd-test").session(session);
+            if (budget?.envelopeVersion === 1) return;
+            const existing = await FinanceRequest.aggregate([
+                { $match: { reservedCents: { $gt: 0 } } },
+                {
+                    $group: {
+                        _id: "$rootTeamPk",
+                        amount: { $sum: "$reservedCents" },
+                    },
+                },
+            ]).session(session);
+            const committed = existing.reduce(
+                (sum, row) => sum + row.amount,
+                0,
+            );
+            if (
+                !budget ||
+                committed > budget.totalCents ||
+                committed !== budget.reservedCents
+            )
+                throw new Error(
+                    "Finance budget reservations need reconciliation before team migration",
+                );
+            for (const team of existing) {
+                await FinanceTeamBudget.updateOne(
+                    { _id: team._id },
+                    {
+                        $setOnInsert: {
+                            name: team._id,
+                            totalCents: team.amount,
+                            reservedCents: team.amount,
+                        },
+                    },
+                    { upsert: true, session },
+                );
+            }
+            await FinanceBudget.updateOne(
+                { _id: "usd-test" },
+                {
+                    $set: { teamAllocatedCents: committed, envelopeVersion: 1 },
+                },
+                { session },
+            );
+        });
+    } finally {
+        await session.endSession();
+    }
 }

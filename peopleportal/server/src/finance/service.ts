@@ -6,6 +6,7 @@ import { FinanceActor, requireReviewer, requireTeamMember } from "./access";
 import {
     FinanceRequest,
     FinanceBudget,
+    FinanceTeamBudget,
     FinanceAudit,
     FinanceCardholder,
     FinanceEntry,
@@ -278,7 +279,11 @@ export class FinanceService {
         cents(totalCents);
         return transaction(async (session) => {
             const budget = await FinanceBudget.findOneAndUpdate(
-                { _id: "usd-test", reservedCents: { $lte: totalCents } },
+                {
+                    _id: "usd-test",
+                    reservedCents: { $lte: totalCents },
+                    teamAllocatedCents: { $lte: totalCents },
+                },
                 { $set: { totalCents } },
                 { new: true, session },
             );
@@ -307,7 +312,93 @@ export class FinanceService {
         return {
             totalCents: budget?.totalCents ?? 0,
             reservedCents: budget?.reservedCents ?? 0,
+            teamAllocatedCents: budget?.teamAllocatedCents ?? 0,
         };
+    }
+
+    async teamBudgets(actor: FinanceActor) {
+        requireReviewer(actor);
+        return (await FinanceTeamBudget.find().sort({ name: 1 })).map(
+            (team) => ({
+                rootTeamPk: team._id,
+                name: team.name,
+                totalCents: team.totalCents,
+                reservedCents: team.reservedCents,
+            }),
+        );
+    }
+
+    async setTeamBudget(
+        actor: FinanceActor,
+        rootTeamPk: string,
+        totalCents: number,
+    ) {
+        requireReviewer(actor);
+        if (totalCents !== 0) cents(totalCents);
+        const { AuthentikClient } = await import("../clients/AuthentikClient");
+        const root = await new AuthentikClient().getGroupInfo(rootTeamPk, {
+            disableSubteamMemberPopulate: true,
+        });
+        if (
+            root.parentPk ||
+            root.attributes.flaggedForDeletion ||
+            root.attributes.archivedAt
+        )
+            fail(422, "Choose an active root team");
+        return transaction(async (session) => {
+            const existing =
+                await FinanceTeamBudget.findById(rootTeamPk).session(session);
+            if (totalCents < (existing?.reservedCents ?? 0))
+                fail(
+                    409,
+                    "Team ceiling cannot be below committed card allocations",
+                );
+            const delta = totalCents - (existing?.totalCents ?? 0);
+            const club = await FinanceBudget.findOneAndUpdate(
+                {
+                    _id: "usd-test",
+                    $expr: {
+                        $lte: [
+                            { $add: ["$teamAllocatedCents", delta] },
+                            "$totalCents",
+                        ],
+                    },
+                },
+                { $inc: { teamAllocatedCents: delta } },
+                { session },
+            );
+            if (!club)
+                fail(
+                    409,
+                    "Team ceilings would exceed the club allocation ceiling",
+                );
+            await FinanceTeamBudget.updateOne(
+                { _id: rootTeamPk },
+                {
+                    $set: {
+                        totalCents,
+                        name:
+                            root.attributes.friendlyName ||
+                            root.name ||
+                            rootTeamPk,
+                    },
+                    $setOnInsert: { reservedCents: 0 },
+                },
+                { upsert: true, session },
+            );
+            await audit(
+                "team_budget_changed",
+                undefined,
+                actor.pk,
+                `${rootTeamPk}: ${totalCents}`,
+                session,
+            );
+            return {
+                rootTeamPk,
+                totalCents,
+                reservedCents: existing?.reservedCents ?? 0,
+            };
+        });
     }
 
     async assignCardholder(
@@ -390,6 +481,24 @@ export class FinanceService {
                 now,
                 initial.neededUntil,
             );
+            const teamBudget = await FinanceTeamBudget.findOneAndUpdate(
+                {
+                    _id: initial.rootTeamPk,
+                    $expr: {
+                        $lte: [
+                            { $add: ["$reservedCents", reservedCents] },
+                            "$totalCents",
+                        ],
+                    },
+                },
+                { $inc: { reservedCents } },
+                { session },
+            );
+            if (!teamBudget)
+                fail(
+                    409,
+                    "Insufficient team allocation; finance must set a team ceiling first",
+                );
             const budget = await FinanceBudget.findOneAndUpdate(
                 {
                     _id: "usd-test",
@@ -755,6 +864,14 @@ export async function reconcileFinanceRequest(
                                     amount: record.approvedCents!,
                                     interval: record.interval,
                                 },
+                                ...(record.interval === "monthly"
+                                    ? [
+                                          {
+                                              amount: record.reservedCents!,
+                                              interval: "all_time" as const,
+                                          },
+                                      ]
+                                    : []),
                             ],
                         },
                         metadata: { finance_request_id: id },

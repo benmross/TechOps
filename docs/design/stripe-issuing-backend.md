@@ -3,8 +3,11 @@
 The finance backend persists virtual-card requests in MongoDB and connects to
 Stripe Issuing through the official Node SDK, pinned to 23.1.0. Its default API
 version and the Issuing Elements ephemeral-key version are 2026-10-28.endive.
-The existing React Finance preview remains a separate in-memory demonstration;
-it does not call these endpoints yet.
+The authenticated Finance page calls the persisted finance API for requests,
+review, team budgets, cardholder mapping, card controls and spending/audit history.
+Card details use Stripe.js Issuing Elements with custodian-only ephemeral keys.
+The in-memory demonstration is confined to the development preview route.
+See `organization-spending-design.md` for the budget model and production gates.
 
 ## Configuration
 
@@ -17,6 +20,7 @@ Set these in the server's private environment, never in source control:
 | Variable | Purpose |
 | --- | --- |
 | PEOPLEPORTAL_FINANCE_ENABLED | Set to true to enable the test integration |
+| STRIPE_PUBLISHABLE_KEY | Matching pk_test_ key for Stripe-hosted card details |
 | STRIPE_SECRET_KEY | Stripe Issuing sandbox secret or restricted test key |
 | STRIPE_WEBHOOK_SECRET | Signing secret for this endpoint, not an API key |
 | PEOPLEPORTAL_FINANCE_REVIEWER_PKS | Comma-separated numeric directory user PKs allowed to review |
@@ -64,6 +68,9 @@ the returned spending totals aggregate all stored entries.
 
 | Method and path under /api/finance | Body or behavior |
 | --- | --- |
+| GET /context | Server role, verified team memberships and test publishable key |
+| GET /team-budgets | Reviewer list of root-team ceilings and committed allocations |
+| PUT /team-budgets/{rootTeamPk} | totalCents; ceilings fit within club budget and cannot undercut commitments |
 | POST /requests | rootTeamPk, subteamPk, purpose, vendor, requestedCents, interval, neededUntil, clientRequestId |
 | GET /requests?before=... | Own requests; reviewers can see all |
 | GET /requests/{id} | Request, settled/held totals, recent ledger entries and audit |
@@ -103,10 +110,19 @@ of the Stripe Issuing balance and not proof that Stripe is funded. Finance must
 fund the test Issuing balance separately. An insufficient Stripe balance can
 still cause authorizations to be declined.
 
+Finance assigns an allocation envelope to each root team, shared by all its
+subteams, cards and custodians. The sum of team ceilings cannot exceed the club
+ceiling. Approval reserves against both the team and club in the same transaction.
+A team without a configured envelope cannot receive new approvals. Startup
+migrates existing reservations to matching team envelopes atomically and only
+once; new capacity is never silently allocated. Shrinking any ceiling below its
+commitments is rejected.
+
 One-time cards use an all_time spending limit and reserve the approved amount.
 Monthly cards reserve the full approved amount for every UTC calendar month
 touched between approval and neededUntil, including both endpoint months. A date
-must be in the future and within 366 days. This bounds recurring commitments
+must be in the future and within 366 days. Monthly cards also receive an all_time limit equal to their full reservation.
+This bounds recurring commitments
 instead of promising an indefinitely renewable allocation from one month's cash.
 
 Freeze, cancellation, expiry and refunds do not automatically release an approved
